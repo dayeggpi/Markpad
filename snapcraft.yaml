@@ -1,5 +1,6 @@
 name: markpad
 adopt-info: markpad
+icon: src-tauri/icons/128x128.png
 summary: The Notepad equivalent for Markdown
 description: A lightweight, fast, and beautiful markdown viewer and editor.
 
@@ -9,7 +10,7 @@ grade: stable
 
 apps:
   markpad:
-    command: markpad
+    command: bin/markpad
     desktop: usr/share/applications/markpad.desktop
     extensions: [gnome]
     plugs:
@@ -46,7 +47,7 @@ parts:
       npx tauri build --no-bundle
       
       # The binary is built in src-tauri/target/release/
-      install -D -m755 src-tauri/target/release/Markpad $CRAFT_PART_INSTALL/markpad
+      install -D -m755 src-tauri/target/release/Markpad $CRAFT_PART_INSTALL/bin/markpad
       
       # Install the icon
       install -D -m644 src-tauri/icons/128x128.png $CRAFT_PART_INSTALL/usr/share/icons/hicolor/128x128/apps/markpad.png
