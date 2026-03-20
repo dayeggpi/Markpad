@@ -38,15 +38,19 @@ export class SettingsStore {
 	vimMode = $state(false);
 	statusBar = $state(true);
 	wordCount = $state(false);
-	renderLineHighlight = $state('none');
+	renderLineHighlight = $state('line');
+	highlightColor = $state('yellow');
 	showTabs = $state(true);
+	restoreStateOnReopen = $state(true);
 	zenMode = $state(false);
+	showToc = $state(false);
 	preZenState = $state<{
 		renderLineHighlight: string;
 		showTabs: boolean;
 		statusBar: boolean;
 		minimap: boolean;
 		lineNumbers: string;
+		showToc: boolean;
 	} | null>(null);
 	occurrencesHighlight = $state(false);
 	showWhitespace = $state(false);
@@ -70,10 +74,13 @@ export class SettingsStore {
 			const savedWordCount = localStorage.getItem('editor.wordCount');
 			const savedRenderLineHighlight = localStorage.getItem('editor.renderLineHighlight');
 			const savedShowTabs = localStorage.getItem('editor.showTabs');
+			const savedRestoreStateOnReopen = localStorage.getItem('editor.restoreStateOnReopen');
 			const savedZenMode = localStorage.getItem('editor.zenMode');
 			const savedPreZenState = localStorage.getItem('editor.preZenState');
 			const savedOccurrencesHighlight = localStorage.getItem('editor.occurrencesHighlight');
 			const savedShowWhitespace = localStorage.getItem('editor.showWhitespace');
+			const savedShowToc = localStorage.getItem('editor.showToc');
+			const savedHighlightColor = localStorage.getItem('editor.highlightColor');
 
 			const savedEditorFont = localStorage.getItem('editor.font');
 			const savedEditorFontSize = localStorage.getItem('editor.fontSize');
@@ -98,9 +105,12 @@ export class SettingsStore {
 			if (savedWordCount !== null) this.wordCount = savedWordCount === 'true';
 			if (savedRenderLineHighlight !== null) this.renderLineHighlight = savedRenderLineHighlight;
 			if (savedShowTabs !== null) this.showTabs = savedShowTabs === 'true';
+			if (savedRestoreStateOnReopen !== null) this.restoreStateOnReopen = savedRestoreStateOnReopen === 'true';
 			if (savedZenMode !== null) this.zenMode = savedZenMode === 'true';
 			if (savedOccurrencesHighlight !== null) this.occurrencesHighlight = savedOccurrencesHighlight === 'true';
 			if (savedShowWhitespace !== null) this.showWhitespace = savedShowWhitespace === 'true';
+			if (savedShowToc !== null) this.showToc = savedShowToc === 'true';
+			if (savedHighlightColor !== null) this.highlightColor = savedHighlightColor;
 			if (savedPreZenState !== null) {
 				try {
 					this.preZenState = JSON.parse(savedPreZenState);
@@ -109,7 +119,6 @@ export class SettingsStore {
 				}
 			}
 
-			// Get OS type and set default fonts
 			this.initOSType().then(() => {
 				const defaults = DEFAULT_FONTS[this.osType];
 
@@ -146,9 +155,12 @@ export class SettingsStore {
 					localStorage.setItem('editor.wordCount', String(this.wordCount));
 					localStorage.setItem('editor.renderLineHighlight', this.renderLineHighlight);
 					localStorage.setItem('editor.showTabs', String(this.showTabs));
+					localStorage.setItem('editor.restoreStateOnReopen', String(this.restoreStateOnReopen));
 					localStorage.setItem('editor.zenMode', String(this.zenMode));
 					localStorage.setItem('editor.occurrencesHighlight', String(this.occurrencesHighlight));
 					localStorage.setItem('editor.showWhitespace', String(this.showWhitespace));
+					localStorage.setItem('editor.showToc', String(this.showToc));
+					localStorage.setItem('editor.highlightColor', this.highlightColor);
 					localStorage.setItem('editor.font', this.editorFont);
 					localStorage.setItem('editor.fontSize', String(this.editorFontSize));
 					localStorage.setItem('preview.font', this.previewFont);
@@ -197,6 +209,10 @@ export class SettingsStore {
 		this.showTabs = !this.showTabs;
 	}
 
+	toggleRestoreStateOnReopen() {
+		this.restoreStateOnReopen = !this.restoreStateOnReopen;
+	}
+
 	toggleZenMode() {
 		this.zenMode = !this.zenMode;
 		if (this.zenMode) {
@@ -206,12 +222,14 @@ export class SettingsStore {
 				statusBar: this.statusBar,
 				minimap: this.minimap,
 				lineNumbers: this.lineNumbers,
+				showToc: this.showToc,
 			};
 			this.renderLineHighlight = 'none';
 			this.showTabs = false;
 			this.statusBar = false;
 			this.minimap = false;
 			this.lineNumbers = 'off';
+			this.showToc = false;
 		} else {
 			if (this.preZenState) {
 				this.renderLineHighlight = this.preZenState.renderLineHighlight;
@@ -219,9 +237,14 @@ export class SettingsStore {
 				this.statusBar = this.preZenState.statusBar;
 				this.minimap = this.preZenState.minimap;
 				this.lineNumbers = this.preZenState.lineNumbers;
+				this.showToc = this.preZenState.showToc;
 				this.preZenState = null;
 			}
 		}
+	}
+
+	toggleToc() {
+		this.showToc = !this.showToc;
 	}
 
 	toggleOccurrencesHighlight() {
