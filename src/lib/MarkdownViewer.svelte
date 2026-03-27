@@ -95,6 +95,7 @@ import { processMarkdownHtml } from './utils/markdown';
 
 	// derived from tab manager
 	let currentFile = $derived(tabManager.activeTab?.path ?? '');
+	let isMarkdown = $derived(['md', 'markdown', 'mdown', 'mkd'].includes(currentFile.split('.').pop()?.toLowerCase() || ''));
 	let editorLanguage = $derived(getLanguage(currentFile));
 	let htmlContent = $derived(tabManager.activeTab?.content ?? '');
 	let sanitizedHtml = $derived(DOMPurify.sanitize(htmlContent));
@@ -105,6 +106,9 @@ import { processMarkdownHtml } from './utils/markdown';
 
 	let showHome = $state(false);
 	let isFullWidth = $state(localStorage.getItem('isFullWidth') === 'true');
+	let viewerWidth = $state(0);
+	const TOC_WIDTH = 240;
+	let isOverhanging = $derived(isFullWidth || (viewerWidth > 0 && TOC_WIDTH > Math.max(50, (viewerWidth - 780) / 2)));
 
 	$effect(() => {
 		localStorage.setItem('isFullWidth', String(isFullWidth));
@@ -157,7 +161,7 @@ import { processMarkdownHtml } from './utils/markdown';
 	});
 
 	// ui state
-	let tooltip = $state({ show: false, text: '', html: '', isFootnote: false, x: 0, y: 0 });
+	let tooltip = $state({ show: false, text: '', html: '', isFootnote: false, x: 0, y: 0, align: 'top' as 'top' | 'right' });
 	let caretEl: HTMLElement;
 	let caretAbsoluteTop = 0;
 	let modalState = $state<{
@@ -1382,7 +1386,7 @@ import { processMarkdownHtml } from './utils/markdown';
 					text = text.replace(/↩.*$/, '').trim(); // remove backrefs if any
 					if (text) {
 						const rect = anchor.getBoundingClientRect();
-						tooltip = { show: true, text, html: '', isFootnote: false, x: rect.left + rect.width / 2, y: rect.top - 8 };
+						tooltip = { show: true, text, html: '', isFootnote: false, x: rect.left + rect.width / 2, y: rect.top - 8, align: 'top' };
 						return;
 					}
 				}
@@ -1403,7 +1407,7 @@ import { processMarkdownHtml } from './utils/markdown';
 					let fnHtml = clone.innerHTML.trim();
 					if (fnHtml) {
 						const rect = anchor.getBoundingClientRect();
-						tooltip = { show: true, text: '', html: fnHtml, isFootnote: true, x: rect.left + rect.width / 2, y: rect.top - 8 };
+						tooltip = { show: true, text: '', html: fnHtml, isFootnote: true, x: rect.left + rect.width / 2, y: rect.top - 8, align: 'top' };
 						return;
 					}
 				}
@@ -1411,7 +1415,7 @@ import { processMarkdownHtml } from './utils/markdown';
 
 			if (anchor.href) {
 				const rect = anchor.getBoundingClientRect();
-				tooltip = { show: true, text: anchor.href, html: '', isFootnote: false, x: rect.left + rect.width / 2, y: rect.top - 8 };
+				tooltip = { show: true, text: anchor.href, html: '', isFootnote: false, x: rect.left + rect.width / 2, y: rect.top - 8, align: 'top' };
 			}
 		}
 	}
@@ -2097,10 +2101,39 @@ import { processMarkdownHtml } from './utils/markdown';
 					{/if}
 
 					<!-- Viewer Pane -->
-					<div bind:this={viewerPaneEl} class="pane viewer-pane" class:active={!isEditing || isSplit} style="flex: {isSplit ? 1 - tabManager.activeTab.splitRatio : !isEditing ? 1 : 0}">
+					<div 
+						bind:this={viewerPaneEl} 
+						bind:clientWidth={viewerWidth}
+						class="pane viewer-pane" 
+						class:active={!isEditing || isSplit} 
+						style="flex: {isSplit ? 1 - tabManager.activeTab.splitRatio : !isEditing ? 1 : 0}">
+						{#if isMarkdown && !showHome}
+							<div class="top-fade-mask"></div>
+							<button 
+								class="toc-toggle-floating {settings.showToc ? 'expanded' : ''}" 
+								onclick={() => settings.toggleToc()}
+								aria-label="{settings.showToc ? 'Hide' : 'Show'} Table of Contents"
+								onmouseenter={(e) => {
+									const rect = e.currentTarget.getBoundingClientRect();
+									tooltip = { 
+										show: true, 
+										text: (settings.showToc ? 'Hide' : 'Show') + ' Table of Contents', 
+										html: '', 
+										isFootnote: false, 
+										x: rect.right + 8, 
+										y: rect.top + rect.height / 2,
+										align: 'right'
+									};
+								}}
+								onmouseleave={() => tooltip.show = false}>
+								<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+									<polyline points="9 18 15 12 9 6"></polyline>
+								</svg>
+							</button>
+						{/if}
 						<div class="viewer-content">
 							{#if settings.showToc}
-								<div transition:slide={{ axis: 'x', duration: 250 }}>
+								<div class="toc-overlay-wrapper" class:is-overhanging={isOverhanging} transition:slide={{ axis: 'x', duration: 250 }}>
 									<Toc {markdownBody} {htmlContent} onBeforeJump={pushScrollHistory} {collapsedHeaders} ontoggleFold={toggleFold} oncopyref={(text) => { const tab = tabManager.activeTab; const fn = tab?.path ? tab.path.split(/[/\\]/).pop()?.replace(/\.[^.]+$/, '') || '' : ''; invoke('clipboard_write_text', { text: fn ? `[[${fn}#${text}]]` : `#${text}` }); }} />
 								</div>
 							{/if}
@@ -2125,7 +2158,7 @@ import { processMarkdownHtml } from './utils/markdown';
 	{/if}
 
 	{#if tooltip.show}
-		<div class="tooltip" class:footnote-tooltip={tooltip.isFootnote} style="left: {tooltip.x}px; top: {tooltip.y}px;">
+		<div class="tooltip align-{tooltip.align}" class:footnote-tooltip={tooltip.isFootnote} style="left: {tooltip.x}px; top: {tooltip.y}px;">
 			{#if tooltip.isFootnote}
 				{@html tooltip.html}
 			{:else}
@@ -2232,8 +2265,6 @@ import { processMarkdownHtml } from './utils/markdown';
 	}
 
 	:global(.markdown-body.toc-active) {
-		padding-left: 24px !important;
-		padding-right: 24px !important;
 	}
 
 	@keyframes slideIn {
@@ -2297,6 +2328,14 @@ import { processMarkdownHtml } from './utils/markdown';
 		transform: translate(-50%, -100%);
 		transition: opacity 0.15s ease-out;
 		opacity: 1;
+	}
+
+	.tooltip.align-right {
+		transform: translateY(-50%);
+	}
+
+	.tooltip.align-right::after {
+		display: none;
 	}
 
 	.tooltip.footnote-tooltip {
@@ -2543,5 +2582,87 @@ import { processMarkdownHtml } from './utils/markdown';
 		flex-direction: column;
 		align-items: flex-end;
 		pointer-events: none;
+	}
+	.top-fade-mask {
+		position: absolute;
+		top: 0;
+		left: 0;
+		width: 60px;
+		height: 52px;
+		background: linear-gradient(to bottom, var(--color-canvas-default) 40%, transparent 100%);
+		pointer-events: none;
+		z-index: 50;
+	}
+
+	.toc-overlay-wrapper {
+		position: absolute;
+		top: 0;
+		left: 0;
+		bottom: 0;
+		z-index: 1000;
+		background-color: color-mix(in srgb, var(--color-canvas-default), transparent 10%);
+		backdrop-filter: blur(5px);
+		-webkit-backdrop-filter: blur(5px);
+		height: 100%;
+		border-right: 1px solid transparent;
+		box-shadow: 10px 0 30px rgba(0, 0, 0, 0);
+		transition: box-shadow 0.3s ease, border-color 0.3s ease;
+	}
+
+	.toc-overlay-wrapper.is-overhanging {
+		border-right-color: var(--color-border-default);
+		box-shadow: 10px 0 30px rgba(0, 0, 0, 0.12);
+	}
+
+	.toc-toggle-floating {
+		position: absolute;
+		top: 12px;
+		left: 12px;
+		width: 28px;
+		height: 28px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background-color: transparent;
+		border: none;
+		border-radius: 6px;
+		color: var(--color-fg-muted);
+		cursor: pointer;
+		z-index: 1001;
+		transition: 
+			left 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+			background-color 0.2s ease,
+			color 0.2s ease,
+			opacity 0.2s ease,
+			transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+		opacity: 0.3;
+		padding: 0;
+	}
+
+	.toc-toggle-floating.expanded {
+		left: 28px;
+	}
+
+	.viewer-pane:hover .toc-toggle-floating, 
+	.toc-toggle-floating:hover {
+		opacity: 1;
+	}
+
+	.toc-toggle-floating:hover {
+		background-color: var(--color-canvas-subtle);
+		color: var(--color-fg-default);
+	}
+
+	.toc-toggle-floating:active {
+		background-color: var(--color-border-muted);
+	}
+
+	.toc-toggle-floating svg {
+		transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+		transform: rotate(0deg);
+	}
+
+	.toc-toggle-floating.expanded svg {
+		transform: rotate(180deg);
 	}
 </style>

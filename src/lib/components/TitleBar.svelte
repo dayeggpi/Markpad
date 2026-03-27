@@ -174,7 +174,7 @@
 		}
 	});
 
-	const inlineIds = ['toc', 'fullWidth', 'edit', 'split', 'sync', 'live'];
+	const inlineIds = ['fullWidth', 'edit', 'split', 'sync', 'live'];
 
 	let visibleActionIds = $derived.by(() => {
 		const list: string[] = [];
@@ -610,24 +610,6 @@
 								d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path
 							></svg>
 						<span class="action-label">Auto-Reload</span>
-					</button>
-				{:else if id === 'toc'}
-					<button
-						class="title-action-btn {settings.showToc ? 'active' : ''}"
-						onclick={() => settings.toggleToc()}
-						aria-label="{settings.showToc ? 'Hide' : 'Show'} Table of Contents"
-						onmouseenter={(e) => showTooltip(e, (settings.showToc ? 'Hide' : 'Show') + ' Table of Contents')}
-						onmouseleave={hideTooltip}
-						transition:fly={{ x: 10, duration: 200 }}>
-						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-							<line x1="8" y1="6" x2="21" y2="6"></line>
-							<line x1="8" y1="12" x2="21" y2="12"></line>
-							<line x1="8" y1="18" x2="21" y2="18"></line>
-							<line x1="3" y1="6" x2="3.01" y2="6"></line>
-							<line x1="3" y1="12" x2="3.01" y2="12"></line>
-							<line x1="3" y1="18" x2="3.01" y2="18"></line>
-						</svg>
-						<span class="action-label">Table of Contents</span>
 					</button>
 				{:else if id === 'edit'}
 					<button

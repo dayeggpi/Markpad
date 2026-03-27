@@ -210,7 +210,7 @@
 					{:else}
 						<div class="toc-link-wrapper">
 							<button aria-label="Toggle fold" class="toc-fold-btn {collapsedHeaders?.has(item.id || item.text || '') ? 'collapsed' : ''}" style={item.hasChildren ? '' : 'visibility: hidden'} onclick={(e) => { e.stopPropagation(); ontoggleFold?.(item.id || item.text || ''); }}>
-								<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+								<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
 							</button>
 							<button
 								class="toc-link {activeId === item.id ? 'active' : ''}"
@@ -235,16 +235,29 @@
 		width: 240px;
 		flex-shrink: 0;
 		height: 100%;
-		background-color: var(--color-canvas-default);
+		background-color: transparent;
 		display: flex;
 		flex-direction: column;
 		overflow: hidden;
 		font-family: var(--win-font);
+		position: relative;
+	}
+
+	.toc-container::before {
+		content: '';
+		position: absolute;
+		top: 0;
+		left: 12px; /* Avoid scrollbar on the left (rtl) */
+		right: 0;
+		height: 52px;
+		background: linear-gradient(to bottom, var(--color-canvas-default) 40%, transparent 100%);
+		pointer-events: none;
+		z-index: 50;
 	}
 
 	.toc-list {
 		margin: 0;
-		padding: 16px 0;
+		padding: 44px 0 16px;
 		list-style: none;
 		overflow-y: auto;
 		overflow-x: hidden;
@@ -282,7 +295,7 @@
 		border: none;
 		padding: 4px;
 		cursor: pointer;
-		opacity: 0;
+		opacity: 0.5;
 		color: var(--color-fg-muted);
 		display: flex;
 		align-items: center;
@@ -291,18 +304,19 @@
 		border-radius: 4px;
 		flex-shrink: 0;
 		flex-grow: 0;
-		width: 20px;
-		height: 20px;
+		width: 24px;
+		height: 24px;
 		box-sizing: border-box;
 		margin: 0;
 	}
 
 	.toc-item:hover .toc-fold-btn, .toc-fold-btn.collapsed {
-		opacity: 0.5;
+		opacity: 0.8;
 	}
 
 	.toc-fold-btn:hover {
 		opacity: 1 !important;
+		background-color: var(--color-canvas-subtle);
 	}
 
 	.toc-fold-btn.collapsed {
@@ -319,12 +333,18 @@
 		color: var(--color-fg-muted);
 		font-size: 13px;
 		cursor: pointer;
-		transition: color 0.1s ease, font-weight 0.1s ease;
+		transition: color 0.1s ease;
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		font-family: inherit;
 		line-height: 20px;
+		outline: none;
+		user-select: none;
+	}
+
+	.toc-link:active {
+		transform: none !important;
 	}
 
 	.toc-link:hover {
@@ -333,7 +353,7 @@
 
 	.toc-link.active {
 		color: var(--color-fg-default);
-		font-weight: 600;
+		text-shadow: 0.5px 0 0 currentColor;
 	}
 
 	.toc-block {
