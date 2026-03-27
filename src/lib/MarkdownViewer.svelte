@@ -893,8 +893,78 @@ import { processMarkdownHtml } from './utils/markdown';
 		syncEditorToPreviewScroll(target);
 	}
 
+	function toggleFold(key: string) {
+		const isCurrentlyCollapsed = collapsedHeaders.has(key);
+
+		if (isCurrentlyCollapsed) {
+			const next = new Set(collapsedHeaders);
+			next.delete(key);
+			collapsedHeaders = next;
+		} else {
+			collapsedHeaders = new Set([...collapsedHeaders, key]);
+		}
+
+		if (!markdownBody) return;
+
+		let h = markdownBody.querySelector(`[id="${CSS.escape(key)}"].foldable-header`) as HTMLElement | null;
+		if (!h) {
+			const allHeaders = markdownBody.querySelectorAll('.foldable-header');
+			for (const el of Array.from(allHeaders)) {
+				if ((el.textContent?.trim() || '') === key) {
+					h = el as HTMLElement;
+					break;
+				}
+			}
+		}
+		if (!h) return;
+
+		const wrapId = h.getAttribute('data-fold-target');
+		const wrapper = wrapId ? document.getElementById(wrapId) : null;
+		if (!wrapper) return;
+
+		h.classList.toggle('is-collapsed', !isCurrentlyCollapsed);
+		wrapper.classList.toggle('is-collapsed', !isCurrentlyCollapsed);
+	}
+
 	function handleLinkClick(e: MouseEvent) {
 		const target = e.target as HTMLElement;
+
+		// header fold toggle
+		const foldIcon = target.closest('.header-fold-icon');
+		const foldableHeader = foldIcon ? foldIcon.closest('.foldable-header') as HTMLElement : null;
+		if (foldableHeader) {
+			if (e.detail > 1) e.preventDefault(); // prevent double-click selection
+			e.stopPropagation();
+			const key = foldableHeader.id || foldableHeader.textContent?.trim() || '';
+			const wrapId = foldableHeader.getAttribute('data-fold-target');
+			const wrapper = wrapId ? document.getElementById(wrapId) : null;
+			if (wrapper) {
+				const isCollapsed = foldableHeader.classList.toggle('is-collapsed');
+				wrapper.classList.toggle('is-collapsed', isCollapsed);
+				if (isCollapsed) {
+					collapsedHeaders = new Set([...collapsedHeaders, key]);
+				} else {
+					const next = new Set(collapsedHeaders);
+					next.delete(key);
+					collapsedHeaders = next;
+				}
+			}
+			return;
+		}
+
+		// callout fold toggle
+		const calloutToggle = target.closest('.callout-toggle');
+		if (calloutToggle) {
+			if (e.detail > 1) e.preventDefault(); // prevent double-click selection
+			e.stopPropagation();
+			const alert = calloutToggle.closest('.callout-foldable');
+			const content = alert?.querySelector('.markdown-alert-content');
+			if (alert && content) {
+				alert.classList.toggle('is-collapsed');
+				content.classList.toggle('is-collapsed');
+			}
+			return;
+		}
 
 		// task checkbox toggle in read mode
 		if (target.tagName === 'INPUT' && (target as HTMLInputElement).type === 'checkbox' && target.hasAttribute('data-task-checkbox')) {
@@ -1319,6 +1389,72 @@ ${markdownBody?.innerHTML || htmlContent}
 		}
 	}
 
+	async function saveImageAs(src: string) {
+		let realPath = '';
+		if (src.startsWith('asset:')) {
+			try {
+				const url = new URL(src);
+				realPath = decodeURIComponent(url.pathname);
+				if (realPath.startsWith('/localhost/')) {
+					realPath = realPath.substring(11);
+				} else if (realPath.startsWith('/')) {
+					realPath = realPath.substring(1);
+				}
+			} catch (e) {
+				console.error('Failed to parse asset URL:', e);
+			}
+		} else if (src.startsWith('http')) {
+			try {
+				const response = await fetch(src);
+				const buffer = await response.arrayBuffer();
+				const dest = await save({ 
+					defaultPath: 'image.png',
+					filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp'] }]
+				});
+				if (dest) {
+					await invoke('save_file_binary', { path: dest, data: Array.from(new Uint8Array(buffer)) });
+					addToast('Image saved successfully');
+				}
+			} catch (e) {
+				addToast('Failed to save remote image', 'error');
+			}
+			return;
+		}
+
+		if (realPath) {
+			const ext = realPath.split('.').pop() || 'png';
+			const dest = await save({ 
+				defaultPath: `image.${ext}`,
+				filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg'] }]
+			});
+			if (dest) {
+				try {
+					await invoke('copy_file', { src: realPath, dest });
+					addToast('Image saved successfully');
+				} catch (e) {
+					addToast(`Failed to save image: ${e}`, 'error');
+				}
+			}
+		}
+	}
+
+	async function saveDiagramAs(container: HTMLElement) {
+		const svg = container.querySelector('svg')?.outerHTML;
+		if (!svg) return;
+		const dest = await save({ 
+			defaultPath: 'diagram.svg',
+			filters: [{ name: 'SVG Image', extensions: ['svg'] }]
+		});
+		if (dest) {
+			try {
+				await invoke('save_file_content', { path: dest, content: svg });
+				addToast('Diagram saved as SVG');
+			} catch (e) {
+				addToast(`Failed to save diagram: ${e}`, 'error');
+			}
+		}
+	}
+
 	function handleContextMenu(e: MouseEvent) {
 		if (mode !== 'app') return;
 		e.preventDefault();
@@ -1327,11 +1463,44 @@ ${markdownBody?.innerHTML || htmlContent}
 		const hasSelection = selection ? selection.toString().length > 0 : false;
 		const isInsideEditor = (e.target as HTMLElement).closest('.editor-container');
 
+		// detect heading for copy ref
+		const heading = (e.target as HTMLElement).closest('h1, h2, h3, h4, h5, h6');
+		let copyRefItem: any[] = [];
+		if (heading) {
+			const text = heading.textContent?.trim() || '';
+			const tab = tabManager.activeTab;
+			const filename = tab?.path ? tab.path.split(/[/\\]/).pop()?.replace(/\.[^.]+$/, '') || '' : '';
+			const ref = filename ? `[[${filename}#${text}]]` : `#${text}`;
+			copyRefItem = [
+				{ label: 'Copy Reference', onClick: () => invoke('clipboard_write_text', { text: ref }) },
+				{ separator: true },
+			];
+		}
+
+		const img = (e.target as HTMLElement).closest('img');
+		let mediaItems: any[] = [];
+		if (img) {
+			mediaItems = [
+				{ label: 'Save Image As...', onClick: () => saveImageAs(img.src) },
+				{ separator: true }
+			];
+		}
+
+		const mermaidDiag = (e.target as HTMLElement).closest('.mermaid-diagram');
+		if (mermaidDiag) {
+			mediaItems = [
+				{ label: 'Save Diagram As SVG...', onClick: () => saveDiagramAs(mermaidDiag as HTMLElement) },
+				{ separator: true }
+			];
+		}
+
 		docContextMenu = {
 			show: true,
 			x: e.clientX,
 			y: e.clientY,
 			items: [
+				...copyRefItem,
+				...mediaItems,
 				...(isEditing && isInsideEditor
 					? [
 							{ label: 'Undo', shortcut: 'Ctrl+Z', onClick: () => editorPane?.undo() },
@@ -2106,7 +2275,7 @@ ${markdownBody?.innerHTML || htmlContent}
 							<article
 								bind:this={markdownBody}
 								contenteditable="false"
-								class="markdown-body {isFullWidth ? 'full-width' : ''}"
+								class="markdown-body {isFullWidth ? 'full-width' : ''} {settings.showToc ? 'toc-active' : ''}"
 								bind:innerHTML={htmlContent}
 								onscroll={handleScroll}
 								onclick={handleLinkClick}
@@ -2228,6 +2397,10 @@ ${markdownBody?.innerHTML || htmlContent}
 		max-width: 100%;
 	}
 
+	:global(.markdown-body.toc-active) {
+		padding-left: 24px !important;
+		padding-right: 24px !important;
+	}
 
 	@keyframes slideIn {
 		from {

@@ -1,8 +1,13 @@
 <script lang="ts">
-	let { markdownBody, htmlContent, onBeforeJump } = $props<{
+	import { slide } from 'svelte/transition';
+
+	let { markdownBody, htmlContent, onBeforeJump, collapsedHeaders, ontoggleFold, oncopyref } = $props<{
 		markdownBody: HTMLElement | null;
 		htmlContent: string;
 		onBeforeJump?: () => void;
+		collapsedHeaders?: Set<string>;
+		ontoggleFold?: (id: string) => void;
+		oncopyref?: (text: string) => void;
 	}>();
 
 	interface TocItem {
@@ -10,6 +15,7 @@
 		text: string;
 		level: number;
 		isBlock: boolean;
+		hasChildren?: boolean;
 	}
 
 	let items = $state<TocItem[]>([]);
@@ -51,10 +57,67 @@
 			}
 			result.sort((a, b) => (allIds.get(a.id) ?? 999) - (allIds.get(b.id) ?? 999));
 
+			for (let i = 0; i < result.length; i++) {
+				const item = result[i];
+				if (item.isBlock) continue;
+				item.hasChildren = false;
+				
+				if (i + 1 < result.length) {
+					const next = result[i+1];
+					if (next.isBlock || next.level > item.level) {
+						item.hasChildren = true;
+					}
+				}
+			}
+
 			items = result;
 		} else {
 			items = [];
 		}
+	});
+
+	function checkTruncation(node: HTMLElement) {
+		const handleMouseOver = () => {
+			if (node.scrollWidth > node.clientWidth) {
+				node.title = node.innerText;
+			} else {
+				node.removeAttribute('title');
+			}
+		};
+		node.addEventListener('mouseover', handleMouseOver);
+		return {
+			destroy() {
+				node.removeEventListener('mouseover', handleMouseOver);
+			}
+		};
+	}
+
+	let visibleItems = $derived.by(() => {
+		let result = [];
+		let hideUntilLevel = 99;
+		for (const item of items) {
+			if (item.isBlock) {
+				if (hideUntilLevel === 99) result.push(item);
+				continue;
+			}
+			if (item.level <= hideUntilLevel) {
+				hideUntilLevel = 99;
+				result.push(item);
+				const key = item.id || item.text || '';
+				if (collapsedHeaders?.has(key)) {
+					hideUntilLevel = item.level;
+				}
+			} else {
+				if (hideUntilLevel === 99) {
+					result.push(item);
+					const key = item.id || item.text || '';
+					if (collapsedHeaders?.has(key)) {
+						hideUntilLevel = item.level;
+					}
+				}
+			}
+		}
+		return result;
 	});
 
 	function handleScroll() {
@@ -68,9 +131,9 @@
 		if (clickLock) return;
 
 		const containerRect = markdownBody.getBoundingClientRect();
-		let currentActive = items[0]?.id || null;
+		let currentActive = visibleItems[0]?.id || null;
 
-		for (const item of items) {
+		for (const item of visibleItems) {
 			const el = markdownBody.querySelector(`[id="${CSS.escape(item.id)}"]`);
 			if (el) {
 				const rect = el.getBoundingClientRect();
@@ -129,27 +192,35 @@
 </script>
 
 <div class="toc-container" bind:this={tocContainer}>
-	{#if items.length > 0}
+	{#if visibleItems.length > 0}
 		<ul class="toc-list">
-			{#each items as item}
-				<li class="toc-item {item.isBlock ? 'block-item' : `level-${item.level}`}">
+			{#each visibleItems as item (item.id)}
+				<li class="toc-item {item.isBlock ? 'block-item' : `level-${item.level}`}" transition:slide={{ duration: 200 }}>
 					{#if item.isBlock}
 					<button
 						class="toc-link toc-block {activeId === item.id ? 'active' : ''}"
 						data-id={item.id}
-						onclick={() => jumpTo(item.id)}>
+						onclick={() => jumpTo(item.id)}
+						use:checkTruncation>
 						<svg class="block-icon" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 							<path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
 						</svg>
 						{item.text}
 					</button>
 					{:else}
-						<button
-							class="toc-link {activeId === item.id ? 'active' : ''}"
-							data-id={item.id}
-							onclick={() => jumpTo(item.id)}>
-							{item.text}
-						</button>
+						<div class="toc-link-wrapper">
+							<button aria-label="Toggle fold" class="toc-fold-btn {collapsedHeaders?.has(item.id || item.text || '') ? 'collapsed' : ''}" style={item.hasChildren ? '' : 'visibility: hidden'} onclick={(e) => { e.stopPropagation(); ontoggleFold?.(item.id || item.text || ''); }}>
+								<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+							</button>
+							<button
+								class="toc-link {activeId === item.id ? 'active' : ''}"
+								data-id={item.id}
+								onclick={() => jumpTo(item.id)}
+								oncontextmenu={(e) => { e.preventDefault(); e.stopPropagation(); oncopyref?.(item.text); }}
+								use:checkTruncation>
+								{item.text}
+							</button>
+						</div>
 					{/if}
 				</li>
 			{/each}
@@ -176,8 +247,12 @@
 		padding: 16px 0;
 		list-style: none;
 		overflow-y: auto;
+		overflow-x: hidden;
+		scrollbar-gutter: stable;
 		flex: 1;
 		direction: rtl; /* move scrollbar to left */
+		display: flex;
+		flex-direction: column;
 	}
 
 	.toc-empty {
@@ -188,8 +263,50 @@
 	}
 
 	.toc-item {
-		margin: 1px 0;
+		padding: 1px 0;
 		direction: ltr; /* keep text content ltr */
+		width: 100%;
+		box-sizing: border-box;
+		overflow-x: hidden;
+		flex-shrink: 0;
+	}
+
+	.toc-link-wrapper {
+		display: flex;
+		align-items: center;
+		width: 100%;
+	}
+
+	.toc-fold-btn {
+		background: none;
+		border: none;
+		padding: 4px;
+		cursor: pointer;
+		opacity: 0;
+		color: var(--color-fg-muted);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		transition: transform 0.2s ease, opacity 0.2s ease, background-color 0.2s ease;
+		border-radius: 4px;
+		flex-shrink: 0;
+		flex-grow: 0;
+		width: 20px;
+		height: 20px;
+		box-sizing: border-box;
+		margin: 0;
+	}
+
+	.toc-item:hover .toc-fold-btn, .toc-fold-btn.collapsed {
+		opacity: 0.5;
+	}
+
+	.toc-fold-btn:hover {
+		opacity: 1 !important;
+	}
+
+	.toc-fold-btn.collapsed {
+		transform: rotate(-90deg);
 	}
 
 	.toc-link {
@@ -198,7 +315,7 @@
 		text-align: left;
 		background: none;
 		border: none;
-		padding: 3px 16px;
+		padding: 3px 16px 3px 4px;
 		color: var(--color-fg-muted);
 		font-size: 13px;
 		cursor: pointer;
@@ -207,7 +324,7 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		font-family: inherit;
-		line-height: 1.5;
+		line-height: 20px;
 	}
 
 	.toc-link:hover {
@@ -232,10 +349,16 @@
 		opacity: 0.4;
 	}
 
-	.level-1 .toc-link { padding-left: 16px; font-weight: 500; font-size: 13px; }
-	.level-2 .toc-link { padding-left: 28px; }
-	.level-3 .toc-link { padding-left: 40px; font-size: 12.5px; }
-	.level-4 .toc-link { padding-left: 52px; font-size: 12px; opacity: 0.9; }
-	.level-5 .toc-link { padding-left: 64px; font-size: 12px; opacity: 0.8; }
-	.level-6 .toc-link { padding-left: 76px; font-size: 12px; opacity: 0.7; }
+	.level-1 .toc-link-wrapper { padding-left: 2px; }
+	.level-2 .toc-link-wrapper { padding-left: 14px; }
+	.level-3 .toc-link-wrapper { padding-left: 26px; }
+	.level-4 .toc-link-wrapper { padding-left: 38px; }
+	.level-5 .toc-link-wrapper { padding-left: 50px; }
+	.level-6 .toc-link-wrapper { padding-left: 62px; }
+
+	.level-1 .toc-link { font-weight: 500; font-size: 13px; }
+	.level-3 .toc-link { font-size: 12.5px; }
+	.level-4 .toc-link { font-size: 12px; opacity: 0.9; }
+	.level-5 .toc-link { font-size: 12px; opacity: 0.8; }
+	.level-6 .toc-link { font-size: 12px; opacity: 0.7; }
 </style>
