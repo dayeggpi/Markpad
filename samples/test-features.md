@@ -21,7 +21,7 @@ Jumps to location in document
 > [!note] Custom titled callout
 > This is a note callout
 
-> [!tip] Tip: combine ==highlights== with **bold** for emphasis.
+> [!tip] You can combine ==highlights== with **bold** for emphasis.
 
 > [!IMPORTANT] Nested callouts work too
 > > [!note] Nested callout
