@@ -1610,6 +1610,10 @@ import { t } from './utils/i18n.js';
 			e.preventDefault();
 			zoomLevel = 100;
 		}
+		if (cmdOrCtrl && key === ',') {
+			e.preventDefault();
+			showSettings = !showSettings;
+		}
 	}
 
 	function pushScrollHistory() {

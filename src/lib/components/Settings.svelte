@@ -634,13 +634,37 @@
 							</div>
 						</div>
 
+					 <div class="setting-item">
+						<label for="appearance-zen-mode">{t('settings.zenMode', settings.language)}</label>
+						<label class="toggle">
+							<input id="appearance-zen-mode" type="checkbox" checked={settings.zenMode} onchange={() => settings.toggleZenMode()} />
+							<span class="toggle-slider"></span>
+						</label>
+					</div>
+
+					<div class="setting-item">
+							<label for="image-directory">Image Directory</label>
+							<input 
+								type="text" 
+								id="image-directory" 
+								class="text-input" 
+								style="width: 120px;" 
+								bind:value={settings.imageDirectory}
+								placeholder="img"
+							/>
+							<span class="slider-value" style="margin-left: 8px;">Default: img</span>
+						</div>
+
+						{#if settings.osType === 'macos'}
 							<div class="setting-item">
-								<label for="appearance-zen-mode">{t('settings.zenMode', settings.language)}</label>
+								<label for="macos-image-scaling">Scale macOS Screenshots</label>
 								<label class="toggle">
-									<input id="appearance-zen-mode" type="checkbox" checked={settings.zenMode} onchange={() => settings.toggleZenMode()} />
+									<input id="macos-image-scaling" type="checkbox" checked={settings.macosImageScaling} onchange={() => settings.toggleMacosImageScaling()} />
 									<span class="toggle-slider"></span>
 								</label>
+								<span class="slider-value" style="margin-left: 8px;">Reduce size by 50%</span>
 							</div>
+						{/if}
 						</div>
 					{/if}
 				</div>
@@ -664,18 +688,18 @@
 	}
 
 	.settings-modal {
-		background: var(--color-canvas-default);
-		border: 1px solid var(--color-border-default);
-		border-radius: 6px;
-		box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
-		width: 560px;
-		max-width: 90vw;
-		height: 420px;
-		display: flex;
-		flex-direction: column;
-		overflow: hidden;
-		font-family: var(--win-font);
-	}
+						background: var(--color-canvas-default);
+						border: 1px solid var(--color-border-default);
+						border-radius: 6px;
+						box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
+						width: 560px;
+						max-width: 90vw;
+						height: 420px;
+						display: flex;
+						flex-direction: column;
+						overflow: hidden;
+						font-family: var(--win-font);
+					}
 
 	.settings-header {
 		display: flex;

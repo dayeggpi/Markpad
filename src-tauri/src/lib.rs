@@ -491,7 +491,7 @@ fn clipboard_read_text() -> Result<String, String> {
 }
 
 #[tauri::command]
-fn clipboard_read_image() -> Result<String, String> {
+fn clipboard_read_image(macos_image_scaling: bool) -> Result<String, String> {
     let mut clipboard = arboard::Clipboard::new().map_err(|e| e.to_string())?;
     let image = clipboard.get_image().map_err(|e| e.to_string())?;
 
@@ -500,14 +500,73 @@ fn clipboard_read_image() -> Result<String, String> {
     {
         let encoder = image::codecs::png::PngEncoder::new(&mut png_data);
         use image::ImageEncoder;
-        encoder
-            .write_image(
-                image.bytes.as_ref(),
-                image.width as u32,
-                image.height as u32,
-                image::ExtendedColorType::Rgba8,
-            )
-            .map_err(|e| e.to_string())?;
+        
+        // Check if running on macOS and scale image if needed
+        #[cfg(target_os = "macos")]
+        {
+            if macos_image_scaling {
+                // Use image crate for high-quality scaling
+                use image::{DynamicImage, ImageBuffer, Rgba};
+                
+                // Convert arboard Image to ImageBuffer
+                let mut img_buffer = ImageBuffer::new(image.width as u32, image.height as u32);
+                for (x, y, pixel) in img_buffer.enumerate_pixels_mut() {
+                    let idx = (y * image.width as u32 + x) as usize * 4;
+                    if idx + 3 < image.bytes.len() {
+                        *pixel = Rgba([
+                            image.bytes[idx],
+                            image.bytes[idx + 1],
+                            image.bytes[idx + 2],
+                            image.bytes[idx + 3]
+                        ]);
+                    }
+                }
+                
+                // Create DynamicImage
+                let dynamic_image = DynamicImage::ImageRgba8(img_buffer);
+                
+                // Resize with high-quality Lanczos3 filter
+                let resized = dynamic_image.resize(
+                    (image.width / 2) as u32,
+                    (image.height / 2) as u32,
+                    image::imageops::FilterType::Lanczos3
+                );
+                
+                // Write the resized image
+                let resized_rgba = resized.to_rgba8();
+                encoder
+                    .write_image(
+                        resized_rgba.as_raw(),
+                        (image.width / 2) as u32,
+                        (image.height / 2) as u32,
+                        image::ExtendedColorType::Rgba8,
+                    )
+                    .map_err(|e| e.to_string())?;
+            } else {
+                // Use original image if scaling is disabled
+                encoder
+                    .write_image(
+                        image.bytes.as_ref(),
+                        image.width as u32,
+                        image.height as u32,
+                        image::ExtendedColorType::Rgba8,
+                    )
+                    .map_err(|e| e.to_string())?;
+            }
+        }
+        
+        #[cfg(not(target_os = "macos"))]
+        {
+            // For other platforms, use the original image
+            encoder
+                .write_image(
+                    image.bytes.as_ref(),
+                    image.width as u32,
+                    image.height as u32,
+                    image::ExtendedColorType::Rgba8,
+                )
+                .map_err(|e| e.to_string())?;
+        }
     }
 
     use base64::{engine::general_purpose, Engine as _};
@@ -515,8 +574,8 @@ fn clipboard_read_image() -> Result<String, String> {
 }
 
 #[tauri::command]
-fn save_image(parent_dir: String, filename: String, base64_data: String) -> Result<String, String> {
-    let img_dir = Path::new(&parent_dir).join("img");
+fn save_image(parent_dir: String, filename: String, base64_data: String, image_directory: String) -> Result<String, String> {
+    let img_dir = Path::new(&parent_dir).join(&image_directory);
     if !img_dir.exists() {
         fs::create_dir_all(&img_dir).map_err(|e| e.to_string())?;
     }
@@ -537,12 +596,12 @@ fn save_image(parent_dir: String, filename: String, base64_data: String) -> Resu
 
     fs::write(&file_path, bytes).map_err(|e| e.to_string())?;
 
-    Ok(format!("img/{}", filename))
+    Ok(format!("{}/{}", image_directory, filename))
 }
 
 #[tauri::command]
-fn copy_file_to_img(src_path: String, parent_dir: String) -> Result<String, String> {
-    let img_dir = Path::new(&parent_dir).join("img");
+fn copy_file_to_img(src_path: String, parent_dir: String, image_directory: String) -> Result<String, String> {
+    let img_dir = Path::new(&parent_dir).join(&image_directory);
     if !img_dir.exists() {
         fs::create_dir_all(&img_dir).map_err(|e| e.to_string())?;
     }
@@ -569,7 +628,7 @@ fn copy_file_to_img(src_path: String, parent_dir: String) -> Result<String, Stri
     let final_dest = img_dir.join(&dest_name);
     fs::copy(src, &final_dest).map_err(|e| e.to_string())?;
 
-    Ok(format!("img/{}", dest_name))
+    Ok(format!("{}/{}", image_directory, dest_name))
 }
 
 #[tauri::command]
@@ -587,8 +646,8 @@ fn copy_file(src: String, dest: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn cleanup_empty_img_dir(parent_dir: String) -> Result<(), String> {
-    let img_dir = Path::new(&parent_dir).join("img");
+fn cleanup_empty_img_dir(parent_dir: String, image_directory: String) -> Result<(), String> {
+    let img_dir = Path::new(&parent_dir).join(&image_directory);
     if img_dir.exists() && img_dir.is_dir() {
         if fs::read_dir(&img_dir)
             .map_err(|e| e.to_string())?

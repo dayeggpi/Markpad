@@ -604,12 +604,12 @@
 				const last = managedImages[managedImages.length - 1];
 				if (!currentContent.includes(last.embed)) {
 					managedImages.pop();
-					const imgPath = `${last.parentDir}\\img\\${last.filename}`;
-					invoke("delete_file", { path: imgPath })
-						.then(() => {
-							invoke("cleanup_empty_img_dir", { parentDir: last.parentDir });
-						})
-						.catch(console.error);
+						const imgPath = `${last.parentDir}/${settings.imageDirectory}/${last.filename}`;
+						invoke("delete_file", { path: imgPath })
+							.then(() => {
+								invoke("cleanup_empty_img_dir", { parentDir: last.parentDir, imageDirectory: settings.imageDirectory });
+							})
+							.catch(console.error);
 				}
 			}
 		});
@@ -701,7 +701,7 @@
 		editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyV, async () => {
 			try {
 				// check for image in clipboard via Rust
-				const base64Image = await invoke("clipboard_read_image").catch(() => null) as string | null;
+				const base64Image = await invoke("clipboard_read_image", { macos_image_scaling: settings.macosImageScaling }).catch(() => null) as string | null;
 				if (base64Image && tabManager.activeTab?.path) {
 					const ext = "png"; // output of Rust command is always PNG
 					const filename = `paste_${Date.now()}.${ext}`;
@@ -714,6 +714,7 @@
 							parentDir,
 							filename,
 							base64Data: base64Image,
+							imageDirectory: settings.imageDirectory,
 						})) as string;
 						const escapedPath = relPath.replace(/ /g, "%20");
 						const embed = `![alt](${escapedPath})`;
@@ -1010,6 +1011,7 @@
 			const relPath = (await invoke("copy_file_to_img", {
 				srcPath: path,
 				parentDir,
+				imageDirectory: settings.imageDirectory,
 			})) as string;
 			const escapedPath = relPath.replace(/ /g, "%20");
 			const embed = `![alt](${escapedPath})`;

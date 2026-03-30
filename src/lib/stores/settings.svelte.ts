@@ -225,10 +225,10 @@ export class SettingsStore {
 					localStorage.setItem('editor.startInEditor', String(this.startInEditor));
 					localStorage.setItem('editor.maxWidth', String(this.editorMaxWidth));
 					localStorage.setItem('editor.pinnedToc', String(this.pinnedToc));
-				localStorage.setItem('editor.tocSide', this.tocSide);
-				localStorage.setItem('editor.imageDirectory', this.imageDirectory);
-				localStorage.setItem('editor.macosImageScaling', String(this.macosImageScaling));
-				localStorage.setItem('editor.language', this.language);
+				  localStorage.setItem('editor.tocSide', this.tocSide);
+				  localStorage.setItem('editor.imageDirectory', this.imageDirectory);
+				  localStorage.setItem('editor.macosImageScaling', String(this.macosImageScaling));
+				  localStorage.setItem('editor.language', this.language);
 					localStorage.setItem('editor.font', this.editorFont);
 					localStorage.setItem('editor.fontSize', String(this.editorFontSize));
 					localStorage.setItem('preview.font', this.previewFont);
