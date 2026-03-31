@@ -309,7 +309,8 @@ export const translations: Record<LanguageCode, Translation> = {
         common: {
             close: 'Close',
             minimize: 'Minimize',
-            maximize: 'Maximize'
+            maximize: 'Maximize',
+            loadingFullDocument: 'Loading full document...'
         }
     },
     'zh-CN': {
@@ -5577,15 +5578,23 @@ export const translations: Record<LanguageCode, Translation> = {
 
 export function t(key: string, lang: LanguageCode = 'en'): string {
     const keys = key.split('.');
-    let result: any = translations[lang];
     
-    for (const k of keys) {
-        if (result && typeof result === 'object' && k in result) {
-            result = result[k];
-        } else {
-            return key; // Fallback to key if translation not found
+    const getValue = (dict: any) => {
+        let res = dict;
+        for (const k of keys) {
+            if (res && typeof res === 'object' && k in res) res = res[k];
+            else return undefined;
         }
+        return typeof res === 'string' ? res : undefined;
+    };
+
+    let result = getValue(translations[lang]);
+    if (result !== undefined) return result;
+    
+    if (lang !== 'en') {
+        result = getValue(translations['en']);
+        if (result !== undefined) return result;
     }
     
-    return typeof result === 'string' ? result : key;
+    return key;
 }
