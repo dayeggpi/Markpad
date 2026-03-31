@@ -2143,9 +2143,9 @@ import { t } from './utils/i18n.js';
 				<div class="layout-container" 
 					class:split={isSplit} 
 					class:editing={isEditing} 
-					class:has-pinned-toc={settings.pinnedToc && settings.showToc}
-					class:toc-on-left={settings.tocSide === 'left'}
-					class:toc-on-right={settings.tocSide === 'right'}>
+					class:has-pinned-toc={isMarkdown && settings.pinnedToc && settings.showToc}
+					class:toc-on-left={isMarkdown && settings.tocSide === 'left'}
+					class:toc-on-right={isMarkdown && settings.tocSide === 'right'}>
 					<!-- Editor Pane -->
 					<div bind:this={editorPaneEl} class="pane editor-pane" class:active={isEditing || isSplit} style="flex: {isSplit ? tabManager.activeTab.splitRatio : isEditing ? 1 : 0}">
 						{#if isEditing || isSplit}
