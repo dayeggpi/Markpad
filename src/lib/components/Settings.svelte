@@ -16,15 +16,15 @@
 	let activeCategory = $state<'editor' | 'preview' | 'appearance'>('editor');
 	let highlightMenuOpen = $state(false);
 	const highlightColors = [
-		{ value: 'default', label: 'Default', color: 'var(--color-accent-fg)' },
-		{ value: 'yellow', label: 'Yellow', color: '#ffd000' },
-		{ value: 'orange', label: 'Orange', color: '#ff8c00' },
-		{ value: 'red', label: 'Red', color: '#ff3c3c' },
-		{ value: 'pink', label: 'Pink', color: '#ff69b4' },
-		{ value: 'purple', label: 'Purple', color: '#a46cf4' },
-		{ value: 'blue', label: 'Blue', color: '#438af3' },
-		{ value: 'cyan', label: 'Cyan', color: '#2bb9b2' },
-		{ value: 'green', label: 'Green', color: '#4db158' }
+		{ value: 'default', color: 'var(--color-accent-fg)' },
+		{ value: 'yellow', color: '#ffd000' },
+		{ value: 'orange', color: '#ff8c00' },
+		{ value: 'red', color: '#ff3c3c' },
+		{ value: 'pink', color: '#ff69b4' },
+		{ value: 'purple', color: '#a46cf4' },
+		{ value: 'blue', color: '#438af3' },
+		{ value: 'cyan', color: '#2bb9b2' },
+		{ value: 'green', color: '#4db158' }
 	];
 	let systemFonts = $state<string[]>([]);
 	let loaded = $state(false);
@@ -383,13 +383,37 @@
 							</div>
 
 							<div class="setting-item">
-								<label for="editor-line-highlight">{t('settings.lineHighlight', settings.language)}</label>
+							<label for="editor-line-highlight">{t('settings.lineHighlight', settings.language)}</label>
+							<label class="toggle">
+								<input id="editor-line-highlight" type="checkbox" checked={settings.renderLineHighlight === 'line'} onchange={() => settings.toggleLineHighlight()} />
+								<span class="toggle-slider"></span>
+							</label>
+						</div>
+
+						<div class="setting-item">
+							<label for="image-directory">{t('settings.imageDirectory', settings.language)}</label>
+							<input
+								type="text"
+								id="image-directory"
+								class="text-input"
+								style="width: 120px;"
+								bind:value={settings.imageDirectory}
+								placeholder="img"
+							/>
+							<span class="slider-value" style="margin-left: 8px;">{t('settings.default', settings.language)}: img</span>
+						</div>
+
+						{#if settings.osType === 'macos'}
+							<div class="setting-item">
+								<label for="macos-image-scaling">{t('settings.scaleMacOSScreenshots', settings.language)}</label>
 								<label class="toggle">
-									<input id="editor-line-highlight" type="checkbox" checked={settings.renderLineHighlight === 'line'} onchange={() => settings.toggleLineHighlight()} />
+									<input id="macos-image-scaling" type="checkbox" checked={settings.macosImageScaling} onchange={() => settings.toggleMacosImageScaling()} />
 									<span class="toggle-slider"></span>
 								</label>
+								<span class="slider-value" style="margin-left: 8px;">{t('settings.reduceSizeBy50', settings.language)}</span>
 							</div>
-						</div>
+						{/if}
+					</div>
 					{:else if activeCategory === 'preview'}
 						<div class="settings-group">
 							<div class="settings-group-header">
@@ -482,10 +506,31 @@
 						</div>
 					{:else if activeCategory === 'appearance'}
 						<div class="settings-group">
-							<h2>{t('settings.appearanceSettings', settings.language)}</h2>
+						<h2>{t('settings.appearanceSettings', settings.language)}</h2>
 
-							<div class="setting-item" style="align-items: flex-start; padding-top: 16px;">
-								<label for="appearance-theme" style="margin-top: 6px;">{t('settings.theme', settings.language)}</label>
+						<div class="setting-item">
+							<label for="appearance-language">{t('settings.language', settings.language)}</label>
+							<div class="select-wrapper">
+								<select id="appearance-language" value={settings.language} onchange={(e) => settings.setLanguage(e.currentTarget.value as LanguageCode)}>
+									{#each getSupportedLanguages() as lang}
+										<option value={lang.code}>{lang.nativeName}</option>
+									{/each}
+								</select>
+								<svg
+									class="select-arrow"
+									width="12"
+									height="12"
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2"
+									stroke-linecap="round"
+									stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+							</div>
+						</div>
+
+						<div class="setting-item" style="align-items: flex-start; padding-top: 16px;">
+							<label for="appearance-theme" style="margin-top: 6px;">{t('settings.theme', settings.language)}</label>
 								<div style="display: flex; flex-direction: column; align-items: flex-end; gap: 8px;">
 									<div class="select-wrapper">
 										<select id="appearance-theme" value={theme} onchange={(e) => onSetTheme?.(e.currentTarget.value as any)}>
@@ -586,9 +631,9 @@
 									class="custom-dropdown-btn" 
 									onclick={(e) => { e.stopPropagation(); highlightMenuOpen = !highlightMenuOpen; }}>
 										<div style="display: flex; align-items: center; gap: 8px;">
-											<div class="color-circle" style="background-color: {highlightColors.find(c => c.value === settings.highlightColor)?.color || 'var(--color-accent-fg)'}"></div>
-											<span>{highlightColors.find(c => c.value === settings.highlightColor)?.label || t('settings.default', settings.language)}</span>
-										</div>
+										<div class="color-circle" style="background-color: {highlightColors.find(c => c.value === settings.highlightColor)?.color || 'var(--color-accent-fg)'}"></div>
+										<span>{t(`colors.${settings.highlightColor || 'default'}`, settings.language)}</span>
+									</div>
 										<svg class="select-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
 								</button>
 								{#if highlightMenuOpen}
@@ -598,74 +643,29 @@
 												<div class="theme-menu-divider" style="height: 1px; background-color: var(--color-border-muted); margin: 4px 0; transform: scaleY(0.5);"></div>
 											{/if}
 											<button 
-												class="custom-dropdown-option {settings.highlightColor === color.value ? 'selected' : ''}" 
-												onclick={() => {
-													settings.highlightColor = color.value;
-													highlightMenuOpen = false;
-												}}
-											>
-												<div class="color-circle" style="background-color: {color.color}"></div>
-												<span>{color.label}</span>
-											</button>
+													class="custom-dropdown-option {settings.highlightColor === color.value ? 'selected' : ''}" 
+													onclick={() => {
+														settings.highlightColor = color.value;
+														highlightMenuOpen = false;
+													}}
+												>
+													<div class="color-circle" style="background-color: {color.color}"></div>
+													<span>{t(`colors.${color.value}`, settings.language)}</span>
+												</button>
 										{/each}
 									</div>
 								{/if}
 							</div>
-						</div>
+					</div>
 
-						<div class="setting-item">
-							<label for="appearance-language">{t('settings.language', settings.language)}</label>
-							<div class="select-wrapper">
-								<select id="appearance-language" value={settings.language} onchange={(e) => settings.setLanguage(e.currentTarget.value as LanguageCode)}>
-									{#each getSupportedLanguages() as lang}
-										<option value={lang.code}>{lang.nativeName}</option>
-									{/each}
-								</select>
-								<svg
-									class="select-arrow"
-									width="12"
-									height="12"
-									viewBox="0 0 24 24"
-									fill="none"
-									stroke="currentColor"
-									stroke-width="2"
-									stroke-linecap="round"
-									stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
-							</div>
-						</div>
-
-					 <div class="setting-item">
+					<div class="setting-item">
 						<label for="appearance-zen-mode">{t('settings.zenMode', settings.language)}</label>
 						<label class="toggle">
 							<input id="appearance-zen-mode" type="checkbox" checked={settings.zenMode} onchange={() => settings.toggleZenMode()} />
 							<span class="toggle-slider"></span>
 						</label>
 					</div>
-
-					<div class="setting-item">
-							<label for="image-directory">Image Directory</label>
-							<input 
-								type="text" 
-								id="image-directory" 
-								class="text-input" 
-								style="width: 120px;" 
-								bind:value={settings.imageDirectory}
-								placeholder="img"
-							/>
-							<span class="slider-value" style="margin-left: 8px;">Default: img</span>
-						</div>
-
-						{#if settings.osType === 'macos'}
-							<div class="setting-item">
-								<label for="macos-image-scaling">Scale macOS Screenshots</label>
-								<label class="toggle">
-									<input id="macos-image-scaling" type="checkbox" checked={settings.macosImageScaling} onchange={() => settings.toggleMacosImageScaling()} />
-									<span class="toggle-slider"></span>
-								</label>
-								<span class="slider-value" style="margin-left: 8px;">Reduce size by 50%</span>
-							</div>
-						{/if}
-						</div>
+					</div>
 					{/if}
 				</div>
 			</div>

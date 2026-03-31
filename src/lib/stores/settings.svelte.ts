@@ -1,19 +1,61 @@
 import { invoke } from '@tauri-apps/api/core';
 
 export type OSType = 'macos' | 'windows' | 'linux' | 'unknown';
-export type LanguageCode = 'en' | 'ja' | 'zh-CN' | 'zh-TW' | 'ko' | 'ru' | 'es' | 'fr' | 'de' | 'pt-BR';
+export type LanguageCode =
+	| 'en' // English
+	| 'ja' // Japanese
+	| 'zh-CN' // Chinese (Simplified)
+	| 'zh-TW' // Chinese (Traditional)
+	| 'ko' // Korean
+	| 'ru' // Russian
+	| 'es' // Spanish
+	| 'fr' // French
+	| 'de' // German
+	| 'pt-BR' // Portuguese (Brazil)
+	| 'it' // Italian
+	| 'pl' // Polish
+	| 'nl' // Dutch
+	| 'sv' // Swedish
+	| 'vi' // Vietnamese
+	| 'pt' // Portuguese (European)
+	| 'ro' // Romanian
+	| 'hu' // Hungarian
+	| 'cs' // Czech
+	| 'sk' // Slovak
+	| 'el' // Greek
+	| 'fi' // Finnish
+	| 'da' // Danish
+	| 'no' // Norwegian
+	| 'id' // Indonesian
+	| 'tr'; // Turkish
 
 export const SUPPORTED_LANGUAGES: { code: LanguageCode; name: string; nativeName: string }[] = [
+	{ code: 'cs', name: 'Czech', nativeName: 'Čeština' },
+	{ code: 'da', name: 'Danish', nativeName: 'Dansk' },
+	{ code: 'nl', name: 'Dutch', nativeName: 'Nederlands' },
 	{ code: 'en', name: 'English', nativeName: 'English' },
-	{ code: 'ja', name: 'Japanese', nativeName: '日本語' },
-	{ code: 'zh-CN', name: 'Chinese (Simplified)', nativeName: '简体中文' },
-	{ code: 'zh-TW', name: 'Chinese (Traditional)', nativeName: '繁體中文' },
-	{ code: 'ko', name: 'Korean', nativeName: '한국어' },
-	{ code: 'ru', name: 'Russian', nativeName: 'Русский' },
-	{ code: 'es', name: 'Spanish', nativeName: 'Español' },
+	{ code: 'fi', name: 'Finnish', nativeName: 'Suomi' },
 	{ code: 'fr', name: 'French', nativeName: 'Français' },
 	{ code: 'de', name: 'German', nativeName: 'Deutsch' },
+	{ code: 'el', name: 'Greek', nativeName: 'Ελληνικά' },
+	{ code: 'hu', name: 'Hungarian', nativeName: 'Magyar' },
+	{ code: 'id', name: 'Indonesian', nativeName: 'Bahasa Indonesia' },
+	{ code: 'it', name: 'Italian', nativeName: 'Italiano' },
+	{ code: 'ja', name: 'Japanese', nativeName: '日本語' },
+	{ code: 'ko', name: 'Korean', nativeName: '한국어' },
+	{ code: 'no', name: 'Norwegian', nativeName: 'Norsk' },
+	{ code: 'pl', name: 'Polish', nativeName: 'Polski' },
+	{ code: 'pt', name: 'Portuguese (European)', nativeName: 'Português (Europeu)' },
 	{ code: 'pt-BR', name: 'Portuguese (Brazil)', nativeName: 'Português (Brasil)' },
+	{ code: 'ro', name: 'Romanian', nativeName: 'Română' },
+	{ code: 'ru', name: 'Russian', nativeName: 'Русский' },
+	{ code: 'sk', name: 'Slovak', nativeName: 'Slovenčina' },
+	{ code: 'es', name: 'Spanish', nativeName: 'Español' },
+	{ code: 'sv', name: 'Swedish', nativeName: 'Svenska' },
+	{ code: 'tr', name: 'Turkish', nativeName: 'Türkçe' },
+	{ code: 'vi', name: 'Vietnamese', nativeName: 'Tiếng Việt' },
+	{ code: 'zh-CN', name: 'Chinese (Simplified)', nativeName: '简体中文' },
+	{ code: 'zh-TW', name: 'Chinese (Traditional)', nativeName: '繁體中文' },
 ];
 
 function detectSystemLanguage(): LanguageCode {
@@ -29,7 +71,25 @@ function detectSystemLanguage(): LanguageCode {
 		if (browserLang.startsWith('es')) return 'es';
 		if (browserLang.startsWith('fr')) return 'fr';
 		if (browserLang.startsWith('de')) return 'de';
-		if (browserLang.startsWith('pt')) return 'pt-BR';
+		if (browserLang.startsWith('pt')) {
+			if (browserLang === 'pt-br') return 'pt-BR';
+			return 'pt';
+		}
+		if (browserLang.startsWith('it')) return 'it';
+		if (browserLang.startsWith('pl')) return 'pl';
+		if (browserLang.startsWith('nl')) return 'nl';
+		if (browserLang.startsWith('sv')) return 'sv';
+		if (browserLang.startsWith('vi')) return 'vi';
+		if (browserLang.startsWith('ro')) return 'ro';
+		if (browserLang.startsWith('hu')) return 'hu';
+		if (browserLang.startsWith('cs')) return 'cs';
+		if (browserLang.startsWith('sk')) return 'sk';
+		if (browserLang.startsWith('el')) return 'el';
+		if (browserLang.startsWith('fi')) return 'fi';
+		if (browserLang.startsWith('da')) return 'da';
+		if (browserLang.startsWith('no')) return 'no';
+		if (browserLang.startsWith('id')) return 'id';
+		if (browserLang.startsWith('tr')) return 'tr';
 	}
 	return 'en';
 }
@@ -165,7 +225,7 @@ export class SettingsStore {
 			if (savedMacosImageScaling !== null) this.macosImageScaling = savedMacosImageScaling === 'true';
 			if (savedLanguage !== null) {
 				const lang = savedLanguage as LanguageCode;
-				const supportedCodes: LanguageCode[] = ['en', 'ja', 'zh-CN', 'zh-TW', 'ko', 'ru', 'es', 'fr', 'de', 'pt-BR'];
+				const supportedCodes: LanguageCode[] = ['en', 'ja', 'zh-CN', 'zh-TW', 'ko', 'ru', 'es', 'fr', 'de', 'pt-BR', 'it', 'pl', 'nl', 'sv', 'vi', 'pt', 'ro', 'hu', 'cs', 'sk', 'el', 'fi', 'da', 'no', 'id', 'tr'];
 				if (supportedCodes.includes(lang)) {
 					this.language = lang;
 				}
