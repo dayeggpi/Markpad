@@ -112,6 +112,9 @@ import { t } from './utils/i18n.js';
 	let windowTitle = $derived(tabManager.activeTab?.title ?? 'Markpad');
 	let isScrollSynced = $derived(tabManager.activeTab?.isScrollSynced ?? false);
 
+	let loadingTabs = $state<string[]>([]);
+	let isAtBottom = $state(false);
+
 	let showHome = $state(false);
 	let isFullWidth = $state(localStorage.getItem('isFullWidth') === 'true');
 	let viewerWidth = $state(0);
@@ -458,13 +461,57 @@ import { t } from './utils/i18n.js';
 				if (tab && !options.preserveEditState && !existing) {
 					tab.isEditing = settings.startInEditor;
 				}
-				const [html, content] = await Promise.all([
-					invoke('open_markdown', { path: filePath }) as Promise<string>,
-					invoke('read_file_content', { path: filePath }) as Promise<string>
-				]);
+				const [html, content, isFull] = await invoke('open_markdown_preview', { path: filePath, maxBytes: 50000 }) as [string, string, boolean];
 				const processedInfo = processMarkdownHtml(html, filePath, collapsedHeaders);
 				tabManager.updateTabContent(activeId, processedInfo);
 				tabManager.setTabRawContent(activeId, content);
+
+				if (!isFull) {
+					loadingTabs = [...loadingTabs, activeId];
+					tick().then(() => {
+						if (markdownBody) isAtBottom = markdownBody.scrollHeight <= markdownBody.clientHeight + 100;
+					});
+					Promise.all([
+						invoke('open_markdown', { path: filePath }) as Promise<string>,
+						invoke('read_file_content', { path: filePath }) as Promise<string>
+					]).then(([fullHtml, fullContent]) => {
+						const applyFull = () => {
+							try {
+								if (isScrolling) {
+									setTimeout(applyFull, 100);
+									return;
+								}
+								if (tabManager.tabs.find((t) => t.id === activeId)?.path === filePath) {
+									const fullProcessed = processMarkdownHtml(fullHtml, filePath, collapsedHeaders);
+									tabManager.updateTabContent(activeId, fullProcessed);
+									tabManager.setTabRawContent(activeId, fullContent);
+									loadingTabs = loadingTabs.filter((id) => id !== activeId);
+									if (tabManager.activeTabId === activeId) {
+										tick().then(() => {
+											setTimeout(renderRichContent, 10);
+										});
+									}
+								} else {
+									loadingTabs = loadingTabs.filter((id) => id !== activeId);
+								}
+							} catch (applyErr) {
+								console.error("applyFull error:", applyErr);
+								addToast('Error processing full markdown: ' + String(applyErr), 'error');
+								loadingTabs = loadingTabs.filter((id) => id !== activeId);
+							}
+						};
+						
+						if ('requestIdleCallback' in window) {
+							(window as any).requestIdleCallback(applyFull, { timeout: 2000 });
+						} else {
+							setTimeout(applyFull, 100);
+						}
+					}).catch((e) => {
+						console.error("Promise.all error:", e);
+						addToast('Backend Error loading full markdown: ' + String(e), 'error');
+						loadingTabs = loadingTabs.filter((id) => id !== activeId);
+					});
+				}
 			} else {
 				if (tab) tab.isEditing = true;
 				const content = (await invoke('read_file_content', { path: filePath })) as string;
@@ -758,8 +805,19 @@ import { t } from './utils/i18n.js';
 		}
 	}
 
+	let isScrolling = $state(false);
+	let scrollIdleTimer: ReturnType<typeof setTimeout>;
+
 	function handleScroll(e: Event) {
 		const target = e.target as HTMLElement;
+
+		isAtBottom = Math.abs(target.scrollHeight - target.scrollTop - target.clientHeight) < 100;
+
+		isScrolling = true;
+		clearTimeout(scrollIdleTimer);
+		scrollIdleTimer = setTimeout(() => {
+			isScrolling = false;
+		}, 300);
 
 		if (isProgrammaticScroll) {
 			isProgrammaticScroll = false;
@@ -1493,12 +1551,15 @@ import { t } from './utils/i18n.js';
 	$effect(() => {
 		const tab = tabManager.activeTab;
 		if (tab && (tab.isSplit || (isEditing && settings.showToc)) && tab.rawContent !== undefined) {
+			if ((tab as any)._lastRenderedRawContent === tab.rawContent) return;
+
 			clearTimeout(debounceTimer);
 			debounceTimer = setTimeout(() => {
 				invoke('render_markdown', { content: tab.rawContent })
 					.then((html) => {
 						const processed = processMarkdownHtml(html as string, tab.path, collapsedHeaders);
 						tabManager.updateTabContent(tab.id, processed);
+						(tab as any)._lastRenderedRawContent = tab.rawContent;
 						tick().then(renderRichContent);
 					})
 					.catch(console.error);
@@ -1765,6 +1826,19 @@ import { t } from './utils/i18n.js';
 				const savedData = localStorage.getItem('savedTabsData');
 				if (savedData) {
 					tabManager.restoreState(savedData);
+					for (const tab of tabManager.tabs) {
+						if (!tab.content && tab.rawContent) {
+							invoke('render_markdown', { content: tab.rawContent })
+								.then((html) => {
+									const processed = processMarkdownHtml(html as string, tab.path, collapsedHeaders);
+									tabManager.updateTabContent(tab.id, processed);
+									if (tabManager.activeTabId === tab.id) {
+										tick().then(renderRichContent);
+									}
+								})
+								.catch(console.error);
+						}
+					}
 				}
 			}
 
@@ -1867,8 +1941,12 @@ import { t } from './utils/i18n.js';
 					if (isForceExiting) return;
 
 					if (settings.restoreStateOnReopen) {
-						const stateStr = tabManager.serializeState();
-						localStorage.setItem('savedTabsData', stateStr);
+						try {
+							const stateStr = tabManager.serializeState();
+							localStorage.setItem('savedTabsData', stateStr);
+						} catch (e) {
+							console.error('Failed to save state on close:', e);
+						}
 						return;
 					}
 
@@ -2090,9 +2168,9 @@ import { t } from './utils/i18n.js';
 				<div class="layout-container" 
 					class:split={isSplit} 
 					class:editing={isEditing} 
-					class:has-pinned-toc={settings.pinnedToc && settings.showToc}
-					class:toc-on-left={settings.tocSide === 'left'}
-					class:toc-on-right={settings.tocSide === 'right'}>
+					class:has-pinned-toc={isMarkdown && settings.pinnedToc && settings.showToc}
+					class:toc-on-left={isMarkdown && settings.tocSide === 'left'}
+					class:toc-on-right={isMarkdown && settings.tocSide === 'right'}>
 					<!-- Editor Pane -->
 					<div bind:this={editorPaneEl} class="pane editor-pane" class:active={isEditing || isSplit} style="flex: {isSplit ? tabManager.activeTab.splitRatio : isEditing ? 1 : 0}">
 						{#if isEditing || isSplit}
@@ -2145,6 +2223,12 @@ import { t } from './utils/i18n.js';
 								tabindex="-1"
 								style="outline: none; font-family: {settings.previewFont}, sans-serif; font-size: {settings.previewFontSize}px; flex: 1;">
 							</article>
+							{#if tabManager.activeTabId && loadingTabs.includes(tabManager.activeTabId) && isAtBottom}
+								<div class="loading-chip" transition:fly={{ y: 20, duration: 300, easing: cubicOut }}>
+									<div class="loading-spinner"></div>
+									<span>{t('common.loadingFullDocument', settings.language)}</span>
+								</div>
+							{/if}
 						</div>
 					</div>
 
@@ -2324,7 +2408,42 @@ import { t } from './utils/i18n.js';
 		padding: 50px clamp(calc(calc(50% - 390px)), 5vw, 50px);
 		height: 100%;
 		overflow-y: auto;
+		overflow-x: hidden;
 		transform: translate3d(0, 0, 0);
+	}
+
+	.loading-chip {
+		position: absolute;
+		bottom: 30px;
+		left: 50%;
+		transform: translateX(-50%);
+		background: var(--color-canvas-overlay);
+		border: 1px solid var(--color-border-default);
+		border-radius: 20px;
+		padding: 8px 16px;
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+		z-index: 100;
+		color: var(--color-fg-muted);
+		font-size: 13px;
+		font-family: var(--win-font), sans-serif;
+	}
+
+	.loading-spinner {
+		width: 14px;
+		height: 14px;
+		border: 2px solid var(--color-border-muted);
+		border-top-color: var(--color-accent-fg);
+		border-radius: 50%;
+		animation: spin 1s linear infinite;
+	}
+
+	@keyframes spin {
+		to {
+			transform: rotate(360deg);
+		}
 	}
 
 	@media print {

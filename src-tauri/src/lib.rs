@@ -159,14 +159,48 @@ fn convert_markdown(content: &str) -> String {
 }
 
 #[tauri::command]
-fn open_markdown(path: String) -> Result<String, String> {
-    let content = fs::read_to_string(path).map_err(|e| e.to_string())?;
-    Ok(convert_markdown(&content))
+async fn open_markdown(path: String) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let content = fs::read_to_string(path).map_err(|e| e.to_string())?;
+        Ok(convert_markdown(&content))
+    })
+    .await
+    .unwrap_or_else(|e| Err(e.to_string()))
 }
 
 #[tauri::command]
-fn render_markdown(content: String) -> String {
-    convert_markdown(&content)
+async fn open_markdown_preview(path: String, max_bytes: usize) -> Result<(String, String, bool), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        use std::io::Read;
+        let mut f = fs::File::open(&path).map_err(|e| e.to_string())?;
+        
+        let metadata = f.metadata().map_err(|e| e.to_string())?;
+        if metadata.len() <= max_bytes as u64 {
+            let content = fs::read_to_string(&path).map_err(|e| e.to_string())?;
+            let html = convert_markdown(&content);
+            return Ok((html, content, true));
+        }
+
+        let mut vec_buf = vec![0; max_bytes];
+        let n = f.read(&mut vec_buf).map_err(|e| e.to_string())?;
+        vec_buf.truncate(n);
+
+        let preview_content = String::from_utf8_lossy(&vec_buf).into_owned();
+
+        let html = convert_markdown(&preview_content);
+        Ok((html, preview_content, false))
+    })
+    .await
+    .unwrap_or_else(|e| Err(e.to_string()))
+}
+
+#[tauri::command]
+async fn render_markdown(content: String) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        Ok(convert_markdown(&content))
+    })
+    .await
+    .unwrap_or_else(|e| Err(e.to_string()))
 }
 
 #[tauri::command]
@@ -844,6 +878,7 @@ pub fn run() {
             clipboard_read_text,
             clipboard_read_image,
             open_markdown,
+            open_markdown_preview,
             render_markdown,
             send_markdown_path,
             read_file_content,

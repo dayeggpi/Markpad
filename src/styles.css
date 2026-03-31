@@ -191,6 +191,10 @@ body {
 	height: 8px;
 }
 
+::-webkit-scrollbar-corner {
+	background: transparent;
+}
+
 ::-webkit-scrollbar-track {
 	background: transparent;
 }
