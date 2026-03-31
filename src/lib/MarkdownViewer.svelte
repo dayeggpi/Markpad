@@ -458,13 +458,40 @@ import { t } from './utils/i18n.js';
 				if (tab && !options.preserveEditState && !existing) {
 					tab.isEditing = settings.startInEditor;
 				}
-				const [html, content] = await Promise.all([
-					invoke('open_markdown', { path: filePath }) as Promise<string>,
-					invoke('read_file_content', { path: filePath }) as Promise<string>
-				]);
+				const [html, content, isFull] = await invoke('open_markdown_preview', { path: filePath, maxBytes: 50000 }) as [string, string, boolean];
 				const processedInfo = processMarkdownHtml(html, filePath, collapsedHeaders);
 				tabManager.updateTabContent(activeId, processedInfo);
 				tabManager.setTabRawContent(activeId, content);
+
+				if (!isFull) {
+					Promise.all([
+						invoke('open_markdown', { path: filePath }) as Promise<string>,
+						invoke('read_file_content', { path: filePath }) as Promise<string>
+					]).then(([fullHtml, fullContent]) => {
+						const applyFull = () => {
+							if (isScrolling) {
+								setTimeout(applyFull, 100);
+								return;
+							}
+							if (tabManager.tabs.find((t) => t.id === activeId)?.path === filePath) {
+								const fullProcessed = processMarkdownHtml(fullHtml, filePath, collapsedHeaders);
+								tabManager.updateTabContent(activeId, fullProcessed);
+								tabManager.setTabRawContent(activeId, fullContent);
+								if (tabManager.activeTabId === activeId) {
+									tick().then(() => {
+										setTimeout(renderRichContent, 10);
+									});
+								}
+							}
+						};
+						
+						if ('requestIdleCallback' in window) {
+							(window as any).requestIdleCallback(applyFull, { timeout: 2000 });
+						} else {
+							setTimeout(applyFull, 100);
+						}
+					}).catch(console.error);
+				}
 			} else {
 				if (tab) tab.isEditing = true;
 				const content = (await invoke('read_file_content', { path: filePath })) as string;
@@ -758,8 +785,17 @@ import { t } from './utils/i18n.js';
 		}
 	}
 
+	let isScrolling = $state(false);
+	let scrollIdleTimer: ReturnType<typeof setTimeout>;
+
 	function handleScroll(e: Event) {
 		const target = e.target as HTMLElement;
+
+		isScrolling = true;
+		clearTimeout(scrollIdleTimer);
+		scrollIdleTimer = setTimeout(() => {
+			isScrolling = false;
+		}, 300);
 
 		if (isProgrammaticScroll) {
 			isProgrammaticScroll = false;
@@ -1765,6 +1801,19 @@ import { t } from './utils/i18n.js';
 				const savedData = localStorage.getItem('savedTabsData');
 				if (savedData) {
 					tabManager.restoreState(savedData);
+					for (const tab of tabManager.tabs) {
+						if (!tab.content && tab.rawContent) {
+							invoke('render_markdown', { content: tab.rawContent })
+								.then((html) => {
+									const processed = processMarkdownHtml(html as string, tab.path, collapsedHeaders);
+									tabManager.updateTabContent(tab.id, processed);
+									if (tabManager.activeTabId === tab.id) {
+										tick().then(renderRichContent);
+									}
+								})
+								.catch(console.error);
+						}
+					}
 				}
 			}
 
@@ -1867,8 +1916,12 @@ import { t } from './utils/i18n.js';
 					if (isForceExiting) return;
 
 					if (settings.restoreStateOnReopen) {
-						const stateStr = tabManager.serializeState();
-						localStorage.setItem('savedTabsData', stateStr);
+						try {
+							const stateStr = tabManager.serializeState();
+							localStorage.setItem('savedTabsData', stateStr);
+						} catch (e) {
+							console.error('Failed to save state on close:', e);
+						}
 						return;
 					}
 

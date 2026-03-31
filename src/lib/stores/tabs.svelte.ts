@@ -48,7 +48,7 @@ class TabManager {
 	serializeState(): string {
 		const stateData = {
 			activeTabId: this.activeTabId,
-			tabs: this.tabs.map(t => ({ ...t, editorViewState: null }))
+			tabs: this.tabs.map(t => ({ ...t, editorViewState: null, content: '' }))
 		};
 		return JSON.stringify(stateData);
 	}
