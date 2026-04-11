@@ -103,7 +103,7 @@ import { t } from './utils/i18n.js';
 
 	// derived from tab manager
 	let currentFile = $derived(tabManager.activeTab?.path ?? '');
-	let isMarkdown = $derived(['md', 'markdown', 'mdown', 'mkd'].includes(currentFile.split('.').pop()?.toLowerCase() || ''));
+	let isMarkdown = $derived(['md', 'markdown', 'mdown', 'mkd', 'txt'].includes(currentFile.split('.').pop()?.toLowerCase() || ''));
 	let editorLanguage = $derived(getLanguage(currentFile));
 	let htmlContent = $derived(tabManager.activeTab?.content ?? '');
 	let sanitizedHtml = $derived(DOMPurify.sanitize(htmlContent));
@@ -453,7 +453,7 @@ import { t } from './utils/i18n.js';
 			if (!activeId) return;
 
 			const ext = filePath.split('.').pop()?.toLowerCase();
-			const isMarkdown = ['md', 'markdown', 'mdown', 'mkd'].includes(ext || '');
+			const isMarkdown = ['md', 'markdown', 'mdown', 'mkd', 'txt'].includes(ext || '');
 			const tab = tabManager.tabs.find((t) => t.id === activeId);
 
 			if (isMarkdown) {
@@ -1510,7 +1510,7 @@ import { t } from './utils/i18n.js';
 			if (!rawHref) return;
 
 			if (rawHref.startsWith('#')) return;
-			const isMarkdown = ['.md', '.markdown', '.mdown', '.mkd'].some((ext) => {
+			const isMarkdown = ['.md', '.markdown', '.mdown', '.mkd', '.txt'].some((ext) => {
 				const urlNoHash = rawHref.split('#')[0].split('?')[0];
 				return urlNoHash.toLowerCase().endsWith(ext);
 			});
