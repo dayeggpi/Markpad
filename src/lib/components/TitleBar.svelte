@@ -190,21 +190,21 @@
 			if (currentFile) list.push('open_loc');
 
 			const ext = currentFile ? currentFile.split('.').pop()?.toLowerCase() || '' : 'md';
-			const isMarkdown = ['md', 'markdown', 'mdown', 'mkd'].includes(ext);
+			const isMarkdown = ['md', 'markdown', 'mdown', 'mkd', 'txt'].includes(ext);
 
 			if (isMarkdown) {
 				list.push('toc');
 				list.push('fullWidth');
-				if (!tabManager.activeTab?.isSplit) {
-					if (!isEditing && currentFile) {
-						list.push('live');
-					}
-					list.push('edit');
+				if (!tabManager.activeTab?.isSplit && !isEditing && currentFile) {
+					list.push('live');
 				}
 				if (tabManager.activeTab?.isSplit) {
 					list.push('sync');
 				}
 				list.push('split');
+			}
+			if (isMarkdown && !tabManager.activeTab?.isSplit) {
+				list.push('edit');
 			}
 			list.push('zen');
 			list.push('tabs');
